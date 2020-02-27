@@ -1,0 +1,887 @@
+#include "readData.h"
+#include "CustoIn.h"
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <ctime>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <random>
+#include "infoSeq.h"
+#include <sys/timeb.h>
+#include <sys/resource.h>
+
+
+using namespace std;
+
+double ** mJobs; // matriz de adjacencia
+double ** mSetupTimes; // matriz reorganizada;
+int n; // quantidade total de vertices
+vector<double> compTimes;
+//double **matrizCustos;
+
+// seed suspeito 1573159540
+// seed tudo errado 1574105579
+// seed 1 erro 1574105576
+int melhoras = 0, melhorasSwap = 0, melhoras2opt = 0;
+int melhorasptb = 0;
+int melhorasReinsert[13];
+//mJobs[1][] = release date
+//mJobs[2][] = processing time
+
+//srand(1574106085);
+// erro 1 conc srand(1574620943);
+// erro com stp srand(1574622718);
+
+void printData(int n, double ** mJobs, double ** mSetupTimes);
+vector<int> construction(int n, double ** mJobs, double ** mSetupTimes, double alfa, double &cTime);
+double sequenceTime(vector<int> s, double ** mJobs, double **mSetupTimes);
+vector<CustoIn> calculaCusto(vector<int> listaCandidatos, vector<int> &s);
+bool comp(const CustoIn& a, const CustoIn& b);
+double compCostSwap(vector<int> &s, int i, int j, double &compTime);
+//void swap(vector<int> &solution, double &cost);
+double compCostBlock(vector<int> &s, int lb, int a, int b, double compTime);
+void compCompletionTime(vector<int> &s, vector<double> &compTimes);
+vector<int> perturb(vector<int> &solucao);
+vector<int> ils(int i_max, int i_ils);
+void reInsertion(int l, vector<int> &solucao, double &custo);
+double compCostReinsertion(int l, int n, vector<int> &s, int i, int j, vector<double> compTimes);
+void rvnd(vector<int> &solucao, double &custo);
+double revCompCostBlock(vector<int> &s, int lb, int a, int b, double compTime);
+void twoOptN(vector<int> &solucao, double &custo);
+double compCost2opt(vector<int> &s, int i, int j, vector<double> compTimes);
+double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence **sequencesMatrix);
+double cpuTime();
+void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix);
+void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes);
+
+int main(int argc, char** argv) {
+
+    double processingTime = 0;
+    double totalTime = 0;
+    vector<int> s;
+    int i_max = 20;
+    int i_ils;
+    readData(argc, argv, &n, &mJobs, &mSetupTimes);
+
+    double comptime;
+    double init, end, execTime, custo;
+    double bestSolution = numeric_limits<double>::infinity(), bestTime = numeric_limits<double>::infinity();
+    double somaTempos = 0, somaCustos = 0;
+
+
+	 std::string arg1(argv[1]);
+    cout <<"\n"<< arg1 << endl;
+
+
+    srand((unsigned)time(0));
+     cout << "seed: " << (unsigned)time(0) << endl;
+
+     if(n >= 150){
+      i_ils = n/2;
+    }
+    else{
+      i_ils = 100;
+    }
+
+    sequencesMatrix = new infoSequence*[n];
+    for(int i = 0; i <= n; ++i){
+        sequencesMatrix[i] = new infoSequence[n];
+        /*for(int j = 0; j < n+1; j++){
+            sequencesMatrix[i][j] = 0;
+        }*/
+    }
+
+     int testes = 1;
+
+     if(argc > 2 && argv[2][1] == 'b'){ // Benchmark mode
+        testes = 10;
+    }
+   
+    
+    for(int run = 0; run < testes; run++){
+
+        srand((unsigned)time(0));
+        cout << "\nseed: " << (unsigned)time(0) << endl;
+        
+        init = cpuTime();
+        s = ils(i_max, i_ils);
+        custo = sequenceTime(s, mJobs, mSetupTimes);
+        end = cpuTime();
+        execTime = end - init;
+        cout << "Tempo de Execução: " << execTime << endl;
+        cout << "custo: " << custo << endl;
+        printSolution(s, mJobs, mSetupTimes);
+
+        somaTempos += execTime;
+        somaCustos += custo;
+
+        if(custo < bestSolution)
+            bestSolution = custo;
+        if(execTime < bestTime)
+            bestTime = execTime;
+
+        }
+        if(testes == 10){
+            cout << arg1 << "," << bestSolution << "," << somaCustos/10 << "," << bestTime << "," << somaTempos/10 << endl; 
+            //cout << "tempo de execucao: " << execTime << endl;
+        }
+
+    return 0;
+}
+
+ void printData(int n, double ** mJobs, double ** mSetupTimes){
+    cout <<"Jobs QTD: "<< n << "\n";
+
+
+    for (int i = 1; i <= n; i++){
+        for(int j = 0; j < 4; j++){
+            cout << mJobs[i][j] << " ";
+        }
+    }
+    
+   for (int i = 0; i <= n; i++){
+        for(int j = 1; j <= n; j++){
+            cout << mSetupTimes[i][j] << " ";
+        }
+    }
+ } 
+
+vector<int> construction(int n, double ** mJobs, double ** mSetupTimes, double alfa, double &compTime){
+    vector<int> s;
+    vector<int> listaCandidatos;
+    //double exetime;
+
+    for(int i = 1; i <= n; i++){
+        listaCandidatos.push_back(i); // insere todos os nós na lista de candidatos
+    }
+
+    for(int j = 0; j < 3; j++){ // tamanho subsequencia inicial
+        int k = rand() % listaCandidatos.size();
+        //s.insert(s.begin() + 1, listaCandidatos[k]); // adiciona trabalho aleatoria a solução
+        s.push_back(listaCandidatos[k]);
+        listaCandidatos.erase(listaCandidatos.begin() + k); // apaga da lista de candidatos oq ja foi pra solução
+    }
+
+
+    vector<CustoIn> custoInsertion = calculaCusto(listaCandidatos, s); // calcula os custo de inserção dos candidatos
+    std::sort(custoInsertion.begin(), custoInsertion.end(), comp); // ordena de forma crescente de acordo com os custos
+
+    int sel;
+    while(!listaCandidatos.empty()){
+        if(alfa == 0){
+            sel = 0;
+        }
+        else{
+            sel = rand() % ((int)std::floor(alfa * (custoInsertion.size() - 1)) + 1); // escolhe um nó dentro de uma faixa definida por alfa
+        }
+
+        //cout << "sel: " << sel << endl;
+
+        s.insert(s.begin() + custoInsertion[sel].arestaOut, custoInsertion[sel].noIn); // insere o nó na solucao
+
+        for(int i = 0; i < listaCandidatos.size(); i++){
+            if(listaCandidatos[i]==custoInsertion[sel].noIn)
+                listaCandidatos.erase(listaCandidatos.begin() + i); // exclui o nó da lista de candidatos
+            }
+        
+        custoInsertion.erase(custoInsertion.begin(), custoInsertion.begin() + custoInsertion.size()); // exclui o nó da lista de custos
+        custoInsertion = calculaCusto(listaCandidatos, s); // calcula os novos custos de inserção
+        std::sort(custoInsertion.begin(), custoInsertion.end(), comp); // ordena os custos
+        
+    }
+    
+
+   // cout << "custo1: " << compCostBlock(s, 0, 1, s.size()-1, initialSetup[s[0]] +  mJobs[s[0]][1]) << " ";
+    //compTime = compCostBlock(s, 0 , 1, s.size()-1, initialSetup[s[0]] + mJobs[s[0]][1] + mJobs[s[0]][2]);
+    //compCompletionTime(s,compTimes);
+    setSequencesMatrix(sequencesMatrix,s,n,mJobs,mSetupTimes);
+    //compTime = compTimes[n-1];
+    compTime = sequenceTime(s, mJobs, mSetupTimes);
+
+    return s;
+}
+
+inline double sequenceTime(vector<int> s, double ** mJobs, double **mSetupTimes){
+    
+    double cTime = mSetupTimes[0][s[0]] + mJobs[s[0]][2] + mJobs[s[0]][1];
+    double totalWT = mJobs[s[0]][1];
+    /*for(int i = 0; i < s.size(); i++){
+        cout << s[i] << " ";
+    }*/
+    for(int i = 0, j = 1; j < s.size(); i++ ,j++){
+        //cout<< i << " " << j << endl;
+        if(cTime >= mJobs[s[j]][1]){
+            cTime += mSetupTimes[s[i]][s[j]] + mJobs[s[j]][2];
+        }
+        else{
+            totalWT += mJobs[s[j]][1] - cTime;
+            cTime += mSetupTimes[s[i]][s[j]] + mJobs[s[j]][2] + (mJobs[s[j]][1] - cTime);
+        }
+    }
+    //cout << "\ntotalWT: " << totalWT - mJobs[s[0]][1]<< endl;
+    return cTime;
+} 
+
+vector<CustoIn> calculaCusto(vector<int> listaCandidatos, vector<int> &s){
+  vector<CustoIn> custoInsertion ((s.size() - 1) * listaCandidatos.size());
+  for(int i = 0, j = 1, l = 0; i < s.size()-1; i++, j++){
+    for(auto k : listaCandidatos){
+      //cout << "s[i]: "<< s[i] << endl;
+      //cout << "k: " << k << endl;
+      custoInsertion[l].custo = mSetupTimes[s[i]][k] +  mSetupTimes[s[j]][k] - mSetupTimes[s[i]][s[j]];
+      //custoInsertion[l].custo = mSetupTimes[s[i]][k] +  mSetupTimes[s[j]][k] + mJobs[k][2] - mJobs[s[i]][2] - mSetupTimes[s[i]][s[j]]; // custo
+      custoInsertion[l].noIn = k; // nó inserido
+      custoInsertion[l].arestaOut = i; // posicao de inserção;
+      l++;
+    }
+  }
+
+  return custoInsertion;
+
+}
+
+ bool comp(const CustoIn& a, const CustoIn& b) // comparação dos custos utilizada para ordenar os objetos
+  {
+    return a.custo < b.custo;
+  }
+
+
+double compCostBlock(vector<int> &s, int lb, int a, int b, double compTime){ //inicio da solucao compTime recebe initialSetup
+
+    double cost;
+
+    if(compTime >= mJobs[s[a]][1]) // custo depende do completion time do job anterior ao bloco
+        cost = compTime + mSetupTimes[s[lb]][s[a]] + mJobs[s[a]][2];
+    else
+        cost = compTime + mSetupTimes[s[lb]][s[a]] + mJobs[s[a]][2] + (mJobs[s[a]][1] - compTime);      
+
+    for(int i = a + 1; i <= b; i++){
+        if(cost >= mJobs[s[i]][1]){
+            cost = cost + mSetupTimes[s[i-1]][s[i]] + mJobs[s[i]][2];
+        }
+        else
+            cost = cost + mSetupTimes[s[i-1]][s[i]] + mJobs[s[i]][2] + (mJobs[s[i]][1] - cost);
+    }
+
+    return cost;
+}
+
+
+double compCostSwap(vector<int> &s, int i, int j, vector<double> compTimes){
+      double cost;
+     
+    //double cost = compTimes[i-1];
+    if(i == 0)
+        cost = 0;
+    else
+        cost = compTimes[i-1];
+    
+    //double cTemp = compTimes[i-1];
+     //cout << "ctemp: " << cost << endl;
+    if(j == i + 1){
+        cost = compCostBlock(s, i-1, j, j, cost);
+        cost = compCostBlock(s, j, i, i, cost);
+    }
+    else{
+        cost = compCostBlock(s, i-1, j, j, cost);
+        cost = compCostBlock(s, j, i+1, j-1, cost);
+        cost = compCostBlock(s, j-1, i, i, cost);
+    }
+
+   if(j != s.size() - 1)
+        cost = compCostBlock(s, i, j+1, s.size() - 1, cost);
+    // cout << "block4: " << cost << endl;
+
+     return cost;
+}
+
+double compCostSwap2(vector<int> &s, int i, int j, infoSequence **sequencesMatrix){
+ double cost;
+    infoSequence swaproute;
+    infoSequence dJob;
+
+    dJob.initialTime = 0;
+    dJob.duration = 0;
+    dJob.firstJob = 0;
+    dJob.lastJob = 0;
+  
+    if(i == 0){
+        if(j == 1){
+            //dJob.initialTime = 0;
+            infoSequence dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[j][i]);
+            //swaproute = concatenateSequence(mSetupTimes, mJobs, sequencesMatrix[j][i], sequencesMatrix[j+1][n-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j+1][s.size()-1]);
+            cost = swaproute.initialTime + swaproute.duration;
+        }
+        else{
+            //dJob.initialTime = 0;
+            infoSequence dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[j][j]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[1][j-1]);
+            //swaproute = concatenateSequencev2(mSetupTimes, mJobs, msequencesMatrix[j][j], sequencesMatrix[i+1][j-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i][i]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+1][n-1]);
+            cost = swaproute.initialTime + swaproute.duration;
+        }
+    }
+    else{
+        if(i == n-2){
+            //dJob.initialTime = mJobs[s[0]][1];
+            infoSequence dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][i]);
+            //swaproute = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[0][i-1], sequencesMatrix[j][i]);
+            cost = swaproute.initialTime + swaproute.duration;
+        }
+        else{
+            if(j == i+1){
+                //dJob.initialTime = mJobs[s[0]][1];
+                infoSequence dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i-1]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][i]);
+                //swaproute = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[0][i-1], sequencesMatrix[j][i]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+1][n-1]);
+                cost = swaproute.initialTime + swaproute.duration;
+            }
+            else{
+                //dJob.initialTime = mJobs[s[0]][1];
+                infoSequence dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i-1]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][j]);
+                //swaproute = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[0][i-1], sequencesMatrix[j][j]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i+1][j-1]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i][i]);
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+1][n-1]);
+                cost = swaproute.initialTime + swaproute.duration;
+            }    
+        }
+    }
+    return cost;
+}
+
+void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
+
+  //double inicioSwap = cpuTime();
+  vector<int> s = solution;
+  vector<int> test = solution;
+  double delta, delta2;
+  double menor = cost;
+  int pos_i = -1, pos_j = -1; // guarda as posições para realizar a operação
+    for(int i = 0; i < solution.size() - 1; i++){ // exclui da operação a primeira e a ultima posição do vetor
+        for(int j = i + 1; j < solution.size(); j++){
+           //delta = compCostSwap(s, i, j, compTimes);
+          /* test = s;
+           swap(test[i], test[j]);
+           delta2 = sequenceTime(test, mJobs, mSetupTimes);*/
+           delta = compCostSwap2(s, i, j, sequencesMatrix);
+            /*if(delta2 != delta){
+                cout <<"i: " << i << " j: "<< j << " delta1 " << delta << endl;
+                cout <<"i: " << i << " j: "<< j << " delta2 " << delta2 << endl;
+                cout << "dif: " << delta2 - delta << endl;
+            }*/
+           //cout << compCostBlock(s, i, j+1, s.size() - 1, 0) << endl;
+            if(delta < menor){
+                menor = delta;
+                pos_i = i;
+                pos_j = j;
+            }
+        }
+    }
+
+    if(pos_i >= 0){ // realiza a operação
+        melhoras++;
+        solution[pos_i] = s[pos_j];
+        solution[pos_j] = s[pos_i];
+        cost =  menor;
+        //compCompletionTime(solution,compTimes);
+        //setSequencesMatrix(sequencesMatrix,solution,n,mJobs,mSetupTimes);
+        melhorasSwap++;
+        //cout <<" comp " <<compTimes[24] << endl;
+        //cout <<"i: " << pos_i << " j: "<< pos_j << endl;
+
+        swap(sequencesMatrix[pos_i][pos_i], sequencesMatrix[pos_j][pos_j]);
+
+        for(int i = 0; i < pos_i; i++){
+            for(int j = pos_i; j < n; j++){
+                sequencesMatrix[i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[i][j-1], sequencesMatrix[j][j]);
+                sequencesMatrix[j][i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][i]);
+            }
+        }
+
+        for(int j = pos_i + 1; j < n; j++){
+            sequencesMatrix[pos_i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[pos_i][j-1], sequencesMatrix[j][j]);
+            sequencesMatrix[j][pos_i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][pos_i]);
+        }
+        
+        for(int i = pos_i + 1; i < pos_j; i++){
+            for(int j = pos_j; j < n; j++){
+                sequencesMatrix[i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[i][j-1], sequencesMatrix[j][j]);
+                sequencesMatrix[j][i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][i]);
+            }
+        }  
+
+         for(int j = pos_j + 1; j < n; j++){
+            sequencesMatrix[pos_j][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[pos_j][j-1], sequencesMatrix[j][j]);
+            sequencesMatrix[j][pos_j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][pos_j]);
+        }
+
+
+
+    /*for(int i = 0; i < n; i++){ // original path
+        for(int j = i+1; j < n; j++){
+                sequencesMatrix[i][j] = dJob;
+        }
+    }
+    for(int i = n-1; i >= 1; i--){ // inverted subsequences
+        for(int j = i-1; j >= 0; j--){
+           
+                    sequencesMatrix[i][j] = dJob;
+        }
+    }*/
+
+        
+    }
+  //double fimSwap = cpuTime();
+ // swapTime += (fimSwap - inicioSwap);   
+}
+
+double compCostReinsertion(int l, int n, vector<int> &s, int i, int j, vector<double> compTimes){
+    double cost = 0;
+
+    if(i < j){
+        (i == 0) ? cost = 0 : cost = compTimes[i-1];
+        cost = compCostBlock(s, i-1, i+l, j+l-1, cost);
+        cost = compCostBlock(s, j+l-1, i, i+l-1, cost);
+        if(j != n-l) // Se o bloco modificado for até o fim então existem apenas dois blocos
+            cost = compCostBlock(s, i+l-1, j+l, n-1, cost);
+    }
+    if(i > j){
+        (j == 0) ? cost = 0 : cost = compTimes[j-1];
+        cost = compCostBlock(s, j-1, i, i-1+l, cost);
+        cost = compCostBlock(s, i-1+l, j, i-1, cost);
+        if(i != n-l) // Se o bloco modificado for até o fim então existem apenas dois blocos
+            cost = compCostBlock(s, i-1, i+l, n-1, cost);    
+    }
+    
+
+    return cost;
+}
+ 
+double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence **sequencesMatrix){
+    infoSequence swaproute;
+    infoSequence dJob;
+    infoSequence dummyJob;
+
+    dJob.initialTime = 0;
+    dJob.duration = 0;
+    dJob.firstJob = 0;
+    dJob.lastJob = 0;
+
+    if(i < j){
+        if(i == 0){
+            dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[i+l][j+l-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[i][i+l-1]);
+            if(j != n-l)
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+l][n-1]);
+        }
+        else{
+            dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[i+l][j+l-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i][i+l-1]);
+            if(j != n-l)
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+l][n-1]);
+        }
+    }
+    else{
+        if(j == 0){
+            dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[i][i+l-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[0][i-1]);
+            if(i != n-l)
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i+l][n-1]);
+        }
+        else{
+            dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][j-1]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[i][i-1+l]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j][i-1]);
+            if(i != n-l)
+                swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[i+l][n-1]);
+        }
+       
+    }
+    double cost = swaproute.initialTime + swaproute.duration;
+
+    return cost;
+}
+
+
+void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó em posição diferente
+  //double inicioreinsertion = cpuTime();
+    vector<int> s = solucao;
+    vector<int> teste;
+    double menor = custo;
+    double delta, delta2;
+    int pos_i = -1, pos_j = -1;
+    //int i = 5, j = 22;
+    for(int i = 0; i < solucao.size() - l; i++){ // varre a solução exceto o 0 e o final
+        for(int j = 0; j < solucao.size() - l; j++){
+            //cout << "i: " << i << " j: "<< j<< endl;
+            //teste = solucao;
+            if(i != j){ // exclui a posição inicial do nó
+                 /*teste.erase(teste.begin() + i, teste.begin() + i + l);
+                 teste.insert(teste.begin() + j, &s[i], &s[i] + l);
+                delta2 = sequenceTime(teste, mJobs, mSetupTimes);*/
+                delta = compCostReinsertionv2(l, s, i, j, sequencesMatrix);
+               //cout << "i: " << i << " j: " << j << " d: " << delta << endl;
+                 /*if(delta2 != delta){
+                    //cout <<"i: " << i << " j: "<< j << " delta1 " << delta << endl;
+                    //cout <<"i: " << i << " j: "<< j << " delta2 " << delta2 << endl;
+                    cout << "dif: " << delta2 - delta << endl;
+                }*/
+                if(delta < menor){
+                    menor = delta;
+                    pos_i = i;
+                    pos_j = j;
+                }
+            }
+        }
+    }
+    if(pos_i != -1){
+        //cout << "i: " << pos_i << " j: " << pos_j << endl;     
+        solucao.erase(solucao.begin() + pos_i, solucao.begin() + pos_i + l);
+        solucao.insert(solucao.begin() + pos_j, &s[pos_i], &s[pos_i] + l);
+        custo = menor;
+        //setSequencesMatrix(sequencesMatrix,solucao,n,mJobs,mSetupTimes);
+       // compCompletionTime(solucao,compTimes);
+       // cout <<" comp " <<compTimes[24] << endl;
+        melhoras++;
+        melhorasReinsert[l-1]++;
+
+
+
+////// SEQUENCE ATT         
+         if(pos_i > pos_j){
+            swap(pos_i, pos_j);
+        }
+
+        for(int i = pos_i; i < pos_j + l; i++){
+            sequencesMatrix[i][i].firstJob = solucao[i];
+            sequencesMatrix[i][i].lastJob = solucao[i];
+            sequencesMatrix[i][i].duration = mJobs[solucao[i]][2];
+            sequencesMatrix[i][i].initialTime = mJobs[solucao[i]][1];
+        }
+       
+        for(int i = 0; i < pos_i; i++){
+            for(int j = pos_i; j < n; j++){
+                sequencesMatrix[i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[i][j-1], sequencesMatrix[j][j]);
+                sequencesMatrix[j][i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][i]);
+            }
+        }
+        for(int i = pos_i; i < pos_j; i++){
+            for(int j = i + 1; j < n; j++){
+                sequencesMatrix[i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[i][j-1], sequencesMatrix[j][j]);
+                sequencesMatrix[j][i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][i]);
+            }
+        }
+        for(int i = pos_j; i < pos_j+l ; i++){
+            for(int j = i + 1; j < n; j++){
+                sequencesMatrix[i][j] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[i][j-1], sequencesMatrix[j][j]);
+                sequencesMatrix[j][i] = concatenateSequencev2(mSetupTimes, mJobs, sequencesMatrix[j][j], sequencesMatrix[j-1][i]);
+            }
+        }
+    }
+  //double fimReinsertion =  cpuTime();
+  //tempo_reinsertion += (fimReinsertion - inicioreinsertion);
+}
+
+double revCompCostBlock(vector<int> &s, int lb, int a, int b, double compTime){ // calcula custo do bloco invertido
+
+     double cost;
+
+    if(compTime >= mJobs[s[b]][1])
+        cost = compTime + mSetupTimes[s[lb]][s[b]] + mJobs[s[b]][2];
+    else
+        cost = compTime + mSetupTimes[s[lb]][s[b]] + mJobs[s[b]][2] + (mJobs[s[b]][1] - compTime);      
+
+    for(int i = b; i > a; i--){
+        if(cost >= mJobs[s[i-1]][1]){
+            cost = cost + mSetupTimes[s[i]][s[i-1]] + mJobs[s[i-1]][2];
+        }
+        else
+            cost = cost + mSetupTimes[s[i]][s[i-1]] + mJobs[s[i-1]][2] + (mJobs[s[i-1]][1] - cost);
+    }
+
+    return cost;
+}
+
+
+double compCost2opt(vector<int> &s, int i, int j, vector<double> compTimes){
+    double cost;
+
+    (i == 0) ? cost = 0 : cost = compTimes[i-1];
+    cost = revCompCostBlock(s, i-1, i, j, cost);
+    if(j != s.size()-1) cost = compCostBlock(s, i, j+1, s.size()-1, cost);
+
+    return cost;
+}
+
+void twoOptN(vector<int> &solucao, double &custo){ // inverte uma subsequencia da solução
+  //double inicio2opt = cpuTime();
+  vector<int> s = solucao;
+  double delta , menor = custo;
+  int pos_i = -1, pos_j = -1;
+    for(int i = 0; i < solucao.size()-1; i++){
+        for(int j = i + 1; j < solucao.size(); j++){
+            //cout << "pos_i: " << i << " pos_j: " << j << endl;
+            delta = compCost2opt(s,i,j,compTimes);
+            if(delta < menor){
+                menor = delta;
+                pos_i = i;
+                pos_j = j;
+            }
+        }
+    }
+    
+    if(pos_i != -1){
+        custo = menor;
+
+        for(int k = pos_i; k <= pos_j; k++){ // invertendo as posições
+            solucao[k] = s[pos_j + pos_i - k];
+        }
+        melhoras2opt++;
+        //compCompletionTime(solucao,compTimes);
+      //cout << "delta: " << menor << endl;
+
+      //cout << "pos_i: " << pos_i << " pos_j: " << pos_j << endl;
+
+    }
+   // double fim2opt = cpuTime();
+    //tempo_2opt += (fim2opt - inicio2opt);
+    
+}
+
+
+
+void compCompletionTime(vector<int> &s, vector<double> &compTimes){
+    compTimes.erase(compTimes.begin(), compTimes.end());
+    double cTime = mJobs[s[0]][1] + mJobs[s[0]][2] + mSetupTimes[0][s[0]];
+
+    compTimes.insert(compTimes.begin(), cTime);
+
+    for(int i = 0, j = 1; j < s.size(); i++ ,j++){
+        //cout<< i << " " << j << endl;
+        if(cTime >= mJobs[s[j]][1]){
+            cTime += mSetupTimes[s[i]][s[j]] + mJobs[s[j]][2];
+        }
+        else{
+            cTime += mSetupTimes[s[i]][s[j]] + mJobs[s[j]][2] + (mJobs[s[j]][1] - cTime);
+        }
+        //cout << "i: " << i << "j: " << j << endl;
+        //cout << cTime << " ";
+        compTimes.insert(compTimes.begin() + j, cTime);
+    }
+}
+
+vector<int> perturb(vector<int> &solucao){
+  vector<int> s = solucao;
+
+  int tam_max = ceil(((double)n)/10); // tamanho maximo das subsequencias
+  int inicio1, fim1, inicio2, fim2;
+
+  inicio1 = (rand() % ((n - (2 * tam_max)) - 1 + 1)); // posicao minima = 0, posicao maxima = final - 2*tmax
+  fim1 = (rand() % ((inicio1 + (tam_max - 1)) - (inicio1 + 1) + 1)) + (inicio1 + 1); // minima = inicio+1, maxima = inicio1 + tmax - 1;
+  inicio2 = (rand() % ((n - tam_max) - (fim1 + 1) + 1) + (fim1 + 1)); // minima = fim1 + 1, maxima = final - tmax;
+  fim2 = (rand() % ((inicio2 + (tam_max - 1)) - (inicio2 + 1) + 1) + (inicio2 + 1)); // minima = inicio2 + 1, maxima = inicio2 + tmax - 1;
+
+
+  int d1 = fim1 - inicio1; // tamanho da primeira subsequencia, usado para corrigir erros na inserção
+  int d2 = fim2 - inicio2; // tamanho da segunda subsequencia, usado pra corrigir erros na inserção
+
+
+  //cout << "inicio1: " << inicio1 <<  " fim2: " << fim2 << endl;
+
+  s.erase(s.begin() + inicio2, s.begin() + fim2 + 1); // apaga primeira subsequencia
+  s.erase(s.begin() + inicio1, s.begin() + fim1 + 1); // apaga segunda subsequencia
+  s.insert(s.begin() + inicio1, &solucao[inicio2], &solucao[fim2] + 1);  // inclui a segunda subsequencia na posicao da primeira
+  s.insert(s.begin() + inicio2 + (-1*(d1 - d2)) , &solucao[inicio1], &solucao[fim1] + 1); // inclui a segunda subsequencia na posicao da segunda
+
+  //compCompletionTime(s,compTimes);
+  setSequencesMatrix(sequencesMatrix,s,n,mJobs,mSetupTimes);
+
+  return s;
+}
+
+vector<int> ils(int i_max, int i_ils){
+    double ff = numeric_limits<double>::infinity(); // custo final
+    vector<int> s, s1, sf; // s, s', s*
+    double fs, fs1;
+    for (int i = 0; i < i_max; i++){
+        cout << "ITER_ILS: " << i << endl;
+        double alfa = (double)rand() / RAND_MAX; // gera aleatorio entre 0 e 1
+        s = construction(n, mJobs, mSetupTimes, alfa, fs); // constroi solucao inicial
+        s1 = s;
+        fs1 = fs;
+        int iter_ILS = 0;
+        while (iter_ILS < i_ils){
+        rvnd(s, fs); // explora as estruturas de vizinhança
+        if (fs < fs1){
+            s1 = s;
+            fs1 = fs;
+            melhorasptb++;
+            iter_ILS = 0;
+        }
+        s = perturb(s1); // perturba a solução evitando resultado ótimo local
+        //fs = compCostBlock(s, 0 , 1, s.size()-1, mSetupTimes[0][s[0]] + mJobs[s[0]][1] + mJobs[s[0]][2]);
+        fs = sequenceTime(s,mJobs,mSetupTimes);
+       // cout << "fs " <<fs << endl;
+        iter_ILS++;
+        }
+        if (fs1 < ff){
+        sf = s1;
+        ff = fs1;
+        cout << "\n" << ff << " " << " na " << i+1 <<  " iter " << melhorasptb << " melhoras" << " Oropt-" << melhorasReinsert[0] << " Oropt2-" << melhorasReinsert[1] << " Oropt3-" << melhorasReinsert[2] << " Oropt4-" << melhorasReinsert[3] << " Oropt5-" << melhorasReinsert[4] << " Oropt6-" << melhorasReinsert[5] << " Oropt7-" << melhorasReinsert[6] << " Oropt8-" << melhorasReinsert[7] << " Oropt9-" << melhorasReinsert[8] << " Oropt10-" << melhorasReinsert[9]<< " Oropt11-" << melhorasReinsert[10]<< " Oropt12-" << melhorasReinsert[11]<< " Oropt13-" << melhorasReinsert[12]<< " 2opt-" << melhoras2opt << " troca-" << melhorasSwap << endl;
+        }
+
+	
+
+    }
+    return sf; // retorna a melhor solucao
+
+}
+
+void rvnd(vector<int> &solucao, double &custo){
+  vector<int> s = solucao;
+  vector<int> nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}; // lista de estruturas
+  double custoMod =  custo;
+  int sel, pos;
+
+  while(!nLista.empty()){ // roda enquanto existirem estruturas de vizinhança na lista
+
+    int k = rand() % nLista.size();
+
+    switch(nLista[k]){
+        case 0:
+            swap(solucao, custoMod, sequencesMatrix);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 1:
+            reInsertion(1,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 2:
+           // twoOptN(solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 3:
+            reInsertion(2,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 4:
+            reInsertion(3,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+    
+        case 5:
+            reInsertion(4,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 6:
+            reInsertion(5,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 7:
+            reInsertion(6,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 8:
+            reInsertion(7,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+    
+        case 9:
+            reInsertion(8,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 10:
+            reInsertion(9,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+        case 11:
+            reInsertion(10,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+        
+        case 12:
+            reInsertion(11,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+        
+        case 13:
+            reInsertion(12,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+        
+        case 14:
+            reInsertion(13,solucao, custoMod);
+            //compCompletionTime(solucao,compTimes);
+            break;
+
+      
+
+    }
+
+    //custoMod = custoTotal(solucao); // calcula o custo do Movimento
+
+    if(custo > custoMod){ // movimento melhorou o custo
+      custo = custoMod;
+      s = solucao;
+      nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
+    }
+    else { // nao melhorou, exclui o movimento da lista
+      solucao = s;
+      nLista.erase(nLista.begin() + k);
+      custoMod = custo;
+    }
+  }
+}
+
+double cpuTime() {
+	static struct rusage usage;
+	getrusage(RUSAGE_SELF, &usage);
+	return ((double)usage.ru_utime.tv_sec)+(((double)usage.ru_utime.tv_usec)/((double)1000000));
+}
+
+void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes){
+    for(int i = 0; i < n; i++){
+        cout << solucao[i] << " ";
+    }
+    cout << "\n";
+    /*for(int i = 0; i < n; i++){
+        cout << mJobs[solucao[i]][1] << " ";
+    }*/
+
+    double cTime = mSetupTimes[0][solucao[0]] + mJobs[solucao[0]][2] + mJobs[solucao[0]][1];
+    double totalWT = mJobs[solucao[0]][1];
+    /*for(int i = 0; i < s.size(); i++){
+        cout << s[i] << " ";
+    }*/
+    cout << totalWT;
+    for(int i = 0, j = 1; j < solucao.size(); i++ ,j++){
+        //cout<< i << " " << j << endl;
+        if(cTime >= mJobs[solucao[j]][1]){
+            cTime += mSetupTimes[solucao[i]][solucao[j]] + mJobs[solucao[j]][2];
+            cout << " " << 0;
+        }
+        else{
+            totalWT = mJobs[solucao[j]][1] - cTime;
+            cout << " " << totalWT;
+            cTime += mSetupTimes[solucao[i]][solucao[j]] + mJobs[solucao[j]][2] + (mJobs[solucao[j]][1] - cTime);
+        }
+    }
+}

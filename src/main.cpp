@@ -75,9 +75,9 @@ int main(int argc, char** argv) {
       i_ils = 100;
     }
 
-    sequencesMatrix = new infoSequence*[n];
+    sequencesMatrix = new infoSequence*[n+1];
     for(int i = 0; i <= n; ++i){
-        sequencesMatrix[i] = new infoSequence[n];
+        sequencesMatrix[i] = new infoSequence[n+1];
         /*for(int j = 0; j < n+1; j++){
             sequencesMatrix[i][j] = 0;
         }*/
@@ -150,7 +150,7 @@ vector<int> construction(int n, double ** mJobs, double ** mSetupTimes, double a
     }
 
 
-    for(int j = 0; j < 0; j++){ // tamanho subsequencia inicial
+    for(int j = 0; j < 1; j++){ // tamanho subsequencia inicial
         int k = rand() % listaCandidatos.size();
         //s.insert(s.begin() + 1, listaCandidatos[k]); // adiciona trabalho aleatoria a solução
         s.push_back(listaCandidatos[k]);
@@ -312,16 +312,13 @@ double compCostSwap2(vector<int> &s, int i, int j, infoSequence **sequencesMatri
 }
 
 void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
-
   //double inicioSwap = cpuTime();
-  vector<int> s = solution;
-  vector<int> test = solution;
   double delta, delta2;
   double menor = cost;
   int pos_i = -1, pos_j = -1; // guarda as posições para realizar a operação
     for(int i = 0; i < solution.size() - 1; i++){ // exclui da operação a primeira e a ultima posição do vetor
         for(int j = i + 1; j < solution.size(); j++){
-           delta = compCostSwap2(s, i, j, sequencesMatrix);
+           delta = compCostSwap2(solution, i, j, sequencesMatrix);
             if(delta < menor){
                 menor = delta;
                 pos_i = i;
@@ -332,8 +329,7 @@ void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
 
     if(pos_i >= 0){ // realiza a operação
         melhoras++;
-        solution[pos_i] = s[pos_j];
-        solution[pos_j] = s[pos_i];
+        swap(solution[pos_i], solution[pos_j]);
         cost =  menor;
         //setSequencesMatrix(sequencesMatrix,solution,n,mJobs,mSetupTimes);
         melhorasSwap++;
@@ -418,15 +414,13 @@ double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence *
 
 void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó em posição diferente
   //double inicioreinsertion = cpuTime();
-    vector<int> s = solucao;
-    vector<int> teste;
     double menor = custo;
     double delta, delta2;
     int pos_i = -1, pos_j = -1;
     for(int i = 0; i < solucao.size() - l; i++){ // varre a solução exceto o 0 e o final
         for(int j = 0; j < solucao.size() - l; j++){
             if(i != j){ // exclui a posição inicial do nó
-                delta = compCostReinsertionv2(l, s, i, j, sequencesMatrix);
+                delta = compCostReinsertionv2(l, solucao, i, j, sequencesMatrix);
                 if(delta < menor){
                     menor = delta;
                     pos_i = i;
@@ -437,8 +431,9 @@ void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó
     }
     if(pos_i != -1){
         //cout << "i: " << pos_i << " j: " << pos_j << endl;     
+        vector<int> subsequence(solucao.begin() + pos_i, solucao.begin() + pos_i + l);
         solucao.erase(solucao.begin() + pos_i, solucao.begin() + pos_i + l);
-        solucao.insert(solucao.begin() + pos_j, &s[pos_i], &s[pos_i] + l);
+        solucao.insert(solucao.begin() + pos_j, subsequence.begin(), subsequence.end());
         custo = menor;
         //setSequencesMatrix(sequencesMatrix,solucao,n,mJobs,mSetupTimes);
         melhoras++;

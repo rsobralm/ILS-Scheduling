@@ -13,11 +13,11 @@
 using namespace std;
 
 struct infoSequence{
-    double duration;    //minimum duration
-    double initialTime; // earliest time 
-    double waitingTime;
-    int firstJob;		// first job of the subsequence
-	int lastJob;		// last job of the subsequence
+    double duration = 0;    //minimum duration
+    double initialTime = 0; // earliest time 
+    double waitingTime = 0;
+    int firstJob = 0;		// first job of the subsequence
+	int lastJob = 0;		// last job of the subsequence
 };
 
 infoSequence **sequencesMatrix;

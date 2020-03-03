@@ -65,10 +65,19 @@ void readData(int argc, char** argv, int *n, double ***mJobs, double ***mSetupTi
     }
 
     for(int i = 0; i <= N; i++){
+        setupTimes[i][0] = 0; // sem erro, ainda suspeito
         for(int j = 1; j <= N; j++){
             in >> setupTimes[i][j];
         }
     }
+
+    /*for(int i = 0; i <= N; i++){
+        setupTimes[i][0] = 0;
+        for(int j = 1; j <= N; j++){
+            setupTimes[i][j] = 0;
+        }
+    }*/
+
 
 
    *mSetupTimes = setupTimes;

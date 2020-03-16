@@ -10,13 +10,13 @@ using namespace std;
 
 void readData(int argc, char** argv, int *n, double ***mJobs, double ***mSetupTimes){
 
-    if (argc < 2) {
+    if (argc < 3) {
          cout << "\nFaltando parametros\n";
          cout << " ./exec [Instancia] "<< endl;
          exit(1);
      }
 
-     if (argc > 3) {
+     if (argc > 4) { // testes insertion
           cout << "\nMuitos parametros\n";
           cout << " ./exec [Instancia] " << endl;
          exit(1);

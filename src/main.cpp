@@ -23,6 +23,7 @@ vector<double> compTimes;
 int melhoras = 0, melhorasSwap = 0, melhoras2opt = 0;
 int melhorasptb = 0;
 int melhorasReinsert[13];
+vector<int> listaSub = {0,1,2,3};
 
 //mJobs[1][] = release date
 //mJobs[2][] = processing time
@@ -63,10 +64,16 @@ int main(int argc, char** argv) {
     double bestSolution = numeric_limits<double>::infinity(), bestTime = numeric_limits<double>::infinity();
     double somaTempos = 0, somaCustos = 0;
 
+    
 
-	 std::string arg1(argv[1]);
-    cout <<"\n"<< arg1 << endl;
-
+	std::string arg1(argv[1]);
+    //cout <<"\n"<< arg1 << endl;
+    //std::string arg2(argv[2]);
+    int nSequences = stoi(argv[3]);
+    //cout << "tamanho da subsequencia: " << nSequences<< endl;
+    for(int i = 4; i <= nSequences; i++){
+        listaSub.push_back(i);
+    }
 
      if(n >= 150){
       i_ils = n/2;
@@ -93,7 +100,7 @@ int main(int argc, char** argv) {
     for(int run = 0; run < testes; run++){
 
         unsigned seed = time(0);
-        cout << "\nseed: " << seed << endl;
+        //cout << "\nseed: " << seed << endl;
         srand(seed);
         
         init = cpuTime();
@@ -101,9 +108,9 @@ int main(int argc, char** argv) {
         custo = sequenceTime(s, mJobs, mSetupTimes);
         end = cpuTime();
         execTime = end - init;
-        cout << "Tempo de Execução: " << execTime << endl;
-        cout << "custo: " << custo << endl;
-        printSolution(s, mJobs, mSetupTimes);
+       //cout << "Tempo de Execução: " << execTime << endl;
+        //cout << "custo: " << custo << endl;
+        //printSolution(s, mJobs, mSetupTimes);
 
         somaTempos += execTime;
         somaCustos += custo;
@@ -511,7 +518,7 @@ vector<int> ils(int i_max, int i_ils){
     vector<int> s, s1, sf; // s, s', s*
     double fs, fs1;
     for (int i = 0; i < i_max; i++){
-        cout << "ITER_ILS: " << i << endl;
+        //cout << "ITER_ILS: " << i << endl;
         double alfa = (double)rand() / RAND_MAX; // gera aleatorio entre 0 e 1
         s = construction(n, mJobs, mSetupTimes, alfa, fs); // constroi solucao inicial
         s1 = s;
@@ -533,7 +540,7 @@ vector<int> ils(int i_max, int i_ils){
         if (fs1 < ff){
         sf = s1;
         ff = fs1;
-        cout << "\n" << ff << " " << " na " << i+1 <<  " iter " << melhorasptb << " melhoras" << " Oropt-" << melhorasReinsert[0] << " Oropt2-" << melhorasReinsert[1] << " Oropt3-" << melhorasReinsert[2] << " Oropt4-" << melhorasReinsert[3] << " Oropt5-" << melhorasReinsert[4] << " Oropt6-" << melhorasReinsert[5] << " Oropt7-" << melhorasReinsert[6] << " Oropt8-" << melhorasReinsert[7] << " Oropt9-" << melhorasReinsert[8] << " Oropt10-" << melhorasReinsert[9]<< " Oropt11-" << melhorasReinsert[10]<< " Oropt12-" << melhorasReinsert[11]<< " Oropt13-" << melhorasReinsert[12]<< " 2opt-" << melhoras2opt << " troca-" << melhorasSwap << endl;
+        //cout << "\n" << ff << " " << " na " << i+1 <<  " iter " << melhorasptb << " melhoras" << " Oropt-" << melhorasReinsert[0] << " Oropt2-" << melhorasReinsert[1] << " Oropt3-" << melhorasReinsert[2] << " Oropt4-" << melhorasReinsert[3] << " Oropt5-" << melhorasReinsert[4] << " Oropt6-" << melhorasReinsert[5] << " Oropt7-" << melhorasReinsert[6] << " Oropt8-" << melhorasReinsert[7] << " Oropt9-" << melhorasReinsert[8] << " Oropt10-" << melhorasReinsert[9]<< " Oropt11-" << melhorasReinsert[10]<< " Oropt12-" << melhorasReinsert[11]<< " Oropt13-" << melhorasReinsert[12]<< " 2opt-" << melhoras2opt << " troca-" << melhorasSwap << endl;
         }
 
 	
@@ -545,7 +552,9 @@ vector<int> ils(int i_max, int i_ils){
 
 void rvnd(vector<int> &solucao, double &custo){
   vector<int> s = solucao;
-  vector<int> nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13}; // lista de estruturas
+  //vector<int> nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13}; // lista de estruturas in02_360.dat,16876,16902.2,67.8574,72.3509
+  //vector<int> nLista = {0,1,2,3}; //instances/in02_360.dat,17081,17101.1,28.9016,32.833
+  vector<int> nLista = listaSub;
   double custoMod =  custo;
   int sel, pos;
 
@@ -619,7 +628,9 @@ void rvnd(vector<int> &solucao, double &custo){
     if(custo > custoMod){ // movimento melhorou o custo
       custo = custoMod;
       s = solucao;
-      nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13};
+      //nLista = {0,1,2,3,4,5,6,7,8,9,10,11,12,13};
+      //nLista = {0,1,2,3};
+      nLista = listaSub;
     }
     else { // nao melhorou, exclui o movimento da lista
       solucao = s;

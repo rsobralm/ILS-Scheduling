@@ -1,0 +1,9 @@
+for i in {4..13}
+	do
+	echo "tamanho subsequencia: $i" >> testesInsert.txt 
+	for file in testeinsert/*
+		do
+		  ./tsp "$file" -b "$i">> testesInsert.txt
+		done
+	done
+

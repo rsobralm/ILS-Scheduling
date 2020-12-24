@@ -50,6 +50,9 @@ double cpuTime();
 void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix);
 void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes);
 
+void invert(vector<int> &solucao, double &custo);
+inline double compCostInvert(vector<int> &s, int i, int j, infoSequence **sequencesMatrix);
+
 int main(int argc, char** argv) {
 
     double processingTime = 0;
@@ -97,7 +100,7 @@ int main(int argc, char** argv) {
     }
    
     
-    for(int run = 0; run < testes; run++){
+   /* for(int run = 0; run < testes; run++){
 
         unsigned seed = time(0);
         //cout << "\nseed: " << seed << endl;
@@ -124,7 +127,10 @@ int main(int argc, char** argv) {
         if(testes == 10){
             cout << arg1 << "," << bestSolution << "," << somaCustos/10 << "," << bestTime << "," << somaTempos/10 << endl; 
             //cout << "tempo de execucao: " << execTime << endl;
-        }
+        }*/
+        double costa;
+        vector<int> t = construction(n, mJobs, mSetupTimes, 0.5, costa);
+        invert(t, costa);
 
     return 0;
 }
@@ -481,6 +487,72 @@ void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó
     }
   //double fimReinsertion =  cpuTime();
   //tempo_reinsertion += (fimReinsertion - inicioreinsertion);
+}
+
+inline double compCostInvert(vector<int> &s, int i, int j, infoSequence **sequencesMatrix){
+    infoSequence swaproute;
+    infoSequence dJob;
+    infoSequence dummyJob;
+
+    dJob.initialTime = 0;
+    dJob.duration = 0;
+    dJob.firstJob = 0;
+    dJob.lastJob = 0;
+
+    if(i == 0){
+        dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[j][i]);
+        swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j+1][n-1]);
+        if(j == n-1)
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][i]);
+    }
+    else
+    {
+        dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i]);
+        swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][i-1]);
+        swaproute = concatenateSequencev2(mSetupTimes, mJobs, swaproute, sequencesMatrix[j+1][n-1]);
+        if(j == n-1){
+            dummyJob = concatenateSequencev2(mSetupTimes, mJobs, dJob, sequencesMatrix[0][i]);
+            swaproute = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[j][i-1]);
+        }
+    }
+    
+    return swaproute.duration + swaproute.initialTime;
+}
+
+void invert(vector<int> &solucao, double &custo){
+    double menor = custo;
+    double delta, delta2;
+    vector<int> teste = solucao;
+    int pos_i = -1, pos_j = -1;
+    for(int i = 0; i < solucao.size()-1; i++){ // varre a solução exceto o 0 e o final
+        for(int j = i+1; j < solucao.size(); j++){
+            delta = compCostInvert(solucao, i, j, sequencesMatrix);
+
+            vector<int> subsequence2(teste.begin() + i, teste.begin() + j);
+            teste.erase(teste.begin() + i, teste.begin() + j);
+            teste.insert(teste.begin() + i, subsequence2.rbegin(), subsequence2.rend());
+            cout << "calc: " << delta << endl;
+            cout << "real: " << sequenceTime(teste, mJobs, mSetupTimes);
+            teste = solucao;
+            if(delta < menor){
+                menor = delta;
+                pos_i = i;
+                pos_j = j;
+            }
+        }
+    }
+
+    if(pos_i != -1){
+        //cout << "i: " << pos_i << " j: " << pos_j << endl;     
+        vector<int> subsequence(solucao.begin() + pos_i, solucao.begin() + pos_j);
+        solucao.erase(solucao.begin() + pos_i, solucao.begin() + pos_j);
+        solucao.insert(solucao.begin() + pos_i, subsequence.rbegin(), subsequence.rend());
+        custo = menor;
+        setSequencesMatrix(sequencesMatrix,solucao,n,mJobs,mSetupTimes);
+        melhoras++;
+        //melhorasReinsert[l-1]++;
+    }
+
 }
 
 vector<int> perturb(vector<int> solucao){

@@ -19,15 +19,11 @@ double ** mJobs; // matriz de adjacencia
 double ** mSetupTimes; // matriz reorganizada;
 int n; // quantidade total de vertices
 vector<double> compTimes;
-vector<vector<int>> arrangedMatrix;
-vector<vector<int>> arrangedMatrixBackTrack;
-vector<int> positionList;
 
 int melhoras = 0, melhorasSwap = 0, melhoras2opt = 0;
 int melhorasptb = 0;
 int melhorasReinsert[13];
 vector<int> listaSub = {0,1,2,3};
-int searchLimiter = 10;
 
 //mJobs[1][] = release date
 //mJobs[2][] = processing time
@@ -53,8 +49,6 @@ double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence *
 double cpuTime();
 void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix);
 void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes);
-void arrangeMatrix(int dimension, double **adjMatrix, vector<vector<int>> &arrangedMatrix);
-vector<int> setPositionList(int n, vector<int> s);
 
 int main(int argc, char** argv) {
 
@@ -64,9 +58,6 @@ int main(int argc, char** argv) {
     int i_max = 20;
     int i_ils;
     readData(argc, argv, &n, &mJobs, &mSetupTimes);
-    //n = 10;
-
-    arrangeMatrix(n, mSetupTimes, arrangedMatrix);
 
     double comptime;
     double init, end, execTime, custo;
@@ -74,6 +65,7 @@ int main(int argc, char** argv) {
     double somaTempos = 0, somaCustos = 0;
 
     
+
 	std::string arg1(argv[1]);
     //cout <<"\n"<< arg1 << endl;
     //std::string arg2(argv[2]);
@@ -104,39 +96,15 @@ int main(int argc, char** argv) {
         testes = 10;
     }
    
-   
-
-  /*  for(int i = 0; i < arrangedMatrix.size(); i++){
-       for(int j = 0; j < arrangedMatrix[i].size(); j++){
-           cout << arrangedMatrix[i][j] << " ";
-       }
-       cout << "\n";
-   }
-
-   cout << endl;
-
-    for(int i = 0; i < arrangedMatrixBackTrack.size(); i++){
-       for(int j = 0; j < arrangedMatrixBackTrack[i].size(); j++){
-           cout << arrangedMatrixBackTrack[i][j] << " ";
-       }
-       cout << "\n";
-   }
-   cout << endl;*/
     
     for(int run = 0; run < testes; run++){
 
         unsigned seed = time(0);
-        //unsigned seed = 1610055151;
-        cout << "\nseed: " << seed << endl;
+        //cout << "\nseed: " << seed << endl;
         srand(seed);
         
         init = cpuTime();
         s = ils(i_max, i_ils);
-        //s = construction(n, mJobs, mSetupTimes, 0.5, custo);
-        //printSolution(s, mJobs, mSetupTimes);
-        //reInsertion(1,s,custo);
-        //swap(s, custo, sequencesMatrix);
-        //printSolution(s,mJobs,mSetupTimes);
         custo = sequenceTime(s, mJobs, mSetupTimes);
         end = cpuTime();
         execTime = end - init;
@@ -156,8 +124,7 @@ int main(int argc, char** argv) {
         if(testes == 10){
             cout << arg1 << "," << bestSolution << "," << somaCustos/10 << "," << bestTime << "," << somaTempos/10 << endl; 
             //cout << "tempo de execucao: " << execTime << endl;
-        }else
-            cout << arg1 << "," << bestSolution << "," << somaCustos << "," << bestTime << "," << somaTempos << endl;
+        }
 
     return 0;
 }
@@ -245,18 +212,6 @@ vector<int> construction(int n, double ** mJobs, double ** mSetupTimes, double a
     cost = initialSolution.initialTime + initialSolution.duration;
     //printSolution(s, mJobs, mSetupTimes);
 
-    positionList = setPositionList(n, s);
-
-    /*for(int i = 0; i < positionList.size(); i++){
-        cout << positionList[i] << " ";
-    }
-    cout << endl;
-
-    for(int i = 0; i < s.size(); i++){
-        cout << s[i] << " ";
-    }
-    cout << endl;*/
-
     return s;
 }
 
@@ -312,10 +267,6 @@ double compCostSwap2(vector<int> &s, int i, int j, infoSequence **sequencesMatri
     dJob.duration = 0;
     dJob.firstJob = 0;
     dJob.lastJob = 0;
-
-    if(i > j)
-        swap(j,i);
-
   
     if(i == 0){
         if(j == 1){
@@ -369,11 +320,10 @@ double compCostSwap2(vector<int> &s, int i, int j, infoSequence **sequencesMatri
 
 void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
   //double inicioSwap = cpuTime();
-  double delta, deltaLeft, deltaRight;
+  double delta, delta2;
   double menor = cost;
-  //vector<int> teste;
   int pos_i = -1, pos_j = -1; // guarda as posições para realizar a operação
-    /*for(int i = 0; i < solution.size() - 1; i++){ // exclui da operação a primeira e a ultima posição do vetor
+    for(int i = 0; i < solution.size() - 1; i++){ // exclui da operação a primeira e a ultima posição do vetor
         for(int j = i + 1; j < solution.size(); j++){
            delta = compCostSwap2(solution, i, j, sequencesMatrix);
             if(delta < menor){
@@ -382,74 +332,7 @@ void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
                 pos_j = j;
             }
         }
-    }*/
-    for(int i = 0; i < solution.size(); i++){
-        int viable_j = 0; //iterador de viabilidade do job mais proximo
-        int viable_j_b = 0;
-        for(int j = 0; j < searchLimiter; j++){
-
-            //teste = solution;
-
-            int nextJobLeft = arrangedMatrixBackTrack[solution[i]][j + viable_j_b]; // grava o #j job mais proximo (setup) do primeiro job i
-            int nextJobRight = arrangedMatrix[solution[i]][j + viable_j];
-
-            while(nextJobRight == solution[i+1] || nextJobRight == solution[0]){
-                viable_j++;
-                nextJobRight = arrangedMatrix[solution[i]][j + viable_j];
-            }
-
-            while(nextJobLeft == solution[n-1] || nextJobLeft == solution[i-1]){
-                viable_j_b++;
-                nextJobLeft = arrangedMatrixBackTrack[solution[i]][j + viable_j_b];
-            }
-            
-
-            int leftPosition = positionList[nextJobLeft] + 1; // coloca o nó da posicão atras do vizinho mais proximo
-            int rightPosition = positionList[nextJobRight] - 1;
-
-            if(rightPosition < 0)
-                rightPosition++;
-
-           /* printSolution(solution, mJobs, mSetupTimes);
-            cout << "i = " << i << " job = " << solution[i] << " nextLeft = " << nextJobLeft << " nextRight = " << nextJobRight << endl;
-           // cout <<"rightPos = " << rightPosition << endl;
-            cout <<"leftPos = " << leftPosition << endl;*/
-
-            // inverter calculo caso j < i
-           /* if(rightPosition > i)
-                delta = compCostSwap2(solution, i, rightPosition, sequencesMatrix);
-            else
-                delta = compCostSwap2(solution, rightPosition, i, sequencesMatrix);
-            */
-            deltaRight = compCostSwap2(solution, rightPosition, i, sequencesMatrix);
-            deltaLeft = compCostSwap2(solution, leftPosition, i, sequencesMatrix);
-
-            if(deltaLeft < deltaRight && deltaLeft < menor){
-                menor = deltaLeft;
-                pos_i = i;
-                pos_j = leftPosition;
-            }
-            else{
-                if(deltaRight < menor){
-                    menor = deltaRight;
-                    pos_i = i;
-                    pos_j = rightPosition;
-                }
-            }
-            /*swap(teste[i], teste[rightPosition]);
-            printSolution(teste, mJobs, mSetupTimes);
-            cout << endl;*/
-
-            /*if(delta < menor){
-                menor = delta;
-                pos_i = i;
-                pos_j = j;
-            }*/
-
-        }
     }
-
-
 
     if(pos_i >= 0){ // realiza a operação
         melhoras++;
@@ -457,10 +340,6 @@ void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix){
         cost =  menor;
         //setSequencesMatrix(sequencesMatrix,solution,n,mJobs,mSetupTimes);
         melhorasSwap++;
-
-        for (int i = 0; i < n; i++){
-            positionList[solution[i]] = i;
-        }
 
         swap(sequencesMatrix[pos_i][pos_i], sequencesMatrix[pos_j][pos_j]);
 
@@ -542,12 +421,10 @@ double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence *
 
 void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó em posição diferente
   //double inicioreinsertion = cpuTime();
-    //int iteracoes = 0;
-    vector<int> teste = solucao;
     double menor = custo;
-    double delta, delta2, deltaLeft, deltaRight;
+    double delta, delta2;
     int pos_i = -1, pos_j = -1;
-    /*for(int i = 0; i < solucao.size() - l; i++){ // varre a solução exceto o 0 e o final
+    for(int i = 0; i < solucao.size() - l; i++){ // varre a solução exceto o 0 e o final
         for(int j = 0; j < solucao.size() - l; j++){
             if(i != j){ // exclui a posição inicial do nó
                 delta = compCostReinsertionv2(l, solucao, i, j, sequencesMatrix);
@@ -558,90 +435,7 @@ void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó
                 }
             }
         }
-    }*/
-
-    for(int i = 0; i < solucao.size() - l; i++){
-        
-        int viable_j = 0; //iterador de viabilidade do job mais proximo
-        int viable_j_b = 0;
-
-        for(int j = 0; j < searchLimiter; j++){
-
-            //teste = solucao;
-
-            int nextToFirst = arrangedMatrixBackTrack[solucao[i] - 1][j + viable_j_b]; // grava o #j job mais proximo (setup) do primeiro job da subsequencia
-            int nextToLast = arrangedMatrix[solucao[i+l-1]][j + viable_j];  // grava o #j job mais proximo (setup) do ultimo job da subsequencia
-        
-
-            while(positionList[nextToLast] >= i && positionList[nextToLast] <= i+l){ // job mais proximo não pode estar dentro da subsequencia
-                viable_j++;
-                nextToLast = arrangedMatrix[solucao[i+l-1]][viable_j + j]; // seleciona o proximo na matriz de proximidade caso o original seja inviavel
-            }
-
-            while(positionList[nextToFirst] >= i && positionList[nextToFirst] <= i+l){ // job mais proximo não pode estar dentro da subsequencia
-                viable_j_b++;
-                nextToFirst = arrangedMatrixBackTrack[solucao[i] - 1][viable_j_b + j]; // seleciona o proximo na matriz de proximidade caso o original seja inviavel
-            }
-
-           // cout << "i: " << i << " noFirst:" << nextToFirst << endl;
-           // cout << "noLast:" << nextToLast << endl;
-            int ntfPos = positionList[nextToFirst] - l + 1; // coloca o nó da posicão atras do vizinho mais proximo
-            int ntlPos = positionList[nextToLast] - l;
-
-            if(ntlPos < i)
-                ntlPos += l;
-            if(ntfPos < i)
-                ntfPos += l;
-            
-            if(ntlPos < 0)
-                ntlPos = 0;
-            if(ntfPos < 0)
-                ntfPos = 0;
-
-
-            deltaRight = compCostReinsertionv2(l, solucao, i, ntlPos, sequencesMatrix);
-            deltaLeft = compCostReinsertionv2(l, solucao, i, ntfPos, sequencesMatrix);
-
-            if(deltaLeft < deltaRight && deltaLeft < menor){
-                menor = deltaLeft;
-                pos_i = i;
-                pos_j = ntfPos;
-            }
-            else{
-                if(deltaRight < menor){
-                    menor = deltaRight;
-                    pos_i = i;
-                    pos_j = ntlPos;
-                }
-            }
-           /* cout << "ntf: " << ntfPos << endl;
-            //cout << "ntl:" << ntlPos << endl;
-            printSolution(solucao, mJobs, mSetupTimes);
-            cout << "i = " << i << " last = " << solucao[i+l-1] << " nextToLast = " << nextToLast << " nextToFirst = " << nextToFirst << endl;
-             
-            
-            //iteracoes++;
-            //delta = compCostReinsertionv2(l, solucao, i, ntlPos, sequencesMatrix);
-            delta = compCostReinsertionv2(l, solucao, i, ntfPos, sequencesMatrix);
-
-            vector<int> subsequence(teste.begin() + i, teste.begin() + i + l);
-            teste.erase(teste.begin() + i, teste.begin() + i + l);
-            teste.insert(teste.begin() + ntfPos, subsequence.begin(), subsequence.end());
-            printSolution(teste, mJobs, mSetupTimes);
-            cout << "\n";
-            */
-            //delta = min(compCostReinsertionv2(l, solucao, i, ntfPos, sequencesMatrix), compCostReinsertionv2(l, solucao, i, ntlPos-l-1, sequencesMatrix));
-            /*if(delta < menor){
-                menor = delta;
-                pos_i = i;
-                pos_j = j;
-            }*/
-        }
     }
-
-    //cout << "iteraçoes = " << iteracoes << endl;
-
-
     if(pos_i != -1){
         //cout << "i: " << pos_i << " j: " << pos_j << endl;     
         vector<int> subsequence(solucao.begin() + pos_i, solucao.begin() + pos_i + l);
@@ -651,10 +445,6 @@ void reInsertion(int l, vector<int> &solucao, double &custo){ // reinsere um nó
         //setSequencesMatrix(sequencesMatrix,solucao,n,mJobs,mSetupTimes);
         melhoras++;
         melhorasReinsert[l-1]++;
-
-        for (int i = 0; i < n; i++){
-            positionList[solucao[i]] = i;
-        }
 
 
 
@@ -718,11 +508,6 @@ vector<int> perturb(vector<int> solucao){
   s.insert(s.begin() + inicio2 + (-1*(d1 - d2)) , &solucao[inicio1], &solucao[fim1] + 1); // inclui a segunda subsequencia na posicao da segunda
 
   //compCompletionTime(s,compTimes);
-
-  for (int i = 0; i < n; i++){
-        positionList[s[i]] = i;
-    }
-
   setSequencesMatrix(sequencesMatrix,s,n,mJobs,mSetupTimes);
 
   return s;
@@ -875,88 +660,17 @@ void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes){
     /*for(int i = 0; i < s.size(); i++){
         cout << s[i] << " ";
     }*/
-    //cout << totalWT;
+    cout << totalWT;
     for(int i = 0, j = 1; j < solucao.size(); i++ ,j++){
         //cout<< i << " " << j << endl;
         if(cTime >= mJobs[solucao[j]][1]){
             cTime += mSetupTimes[solucao[i]][solucao[j]] + mJobs[solucao[j]][2];
-            //cout << " " << 0;
+            cout << " " << 0;
         }
         else{
             totalWT = mJobs[solucao[j]][1] - cTime;
-            //cout << " " << totalWT;
+            cout << " " << totalWT;
             cTime += mSetupTimes[solucao[i]][solucao[j]] + mJobs[solucao[j]][2] + (mJobs[solucao[j]][1] - cTime);
         }
     }
-}
-
-void arrangeMatrix(int dimension, double **adjMatrix, vector<vector<int>> &arrangedMatrix)
-{
-  struct arrange
-  {
-    int counter;
-    double **adjMatrix;
-    bool operator()(const int &a, const int &b) const
-    {
-      return adjMatrix[counter][a] < adjMatrix[counter][b];
-    }
-  } arranged;
-
-  struct backArrange
-  {
-    int counter;
-    double **adjMatrix;
-    bool operator()(const int &a, const int &b) const
-    {
-      return adjMatrix[a][counter] < adjMatrix[b][counter];
-    }
-  } backTraceArrange;
-
-
-  arranged.counter = 0;
-  arranged.adjMatrix = adjMatrix;
-  backTraceArrange.counter = 0;
-  backTraceArrange.adjMatrix = adjMatrix;
-
-
-  
-
-  /*for (int i = 1; i <= dimension; i++)
-  {
-    optimal.push_back(i);
-  }*/
-
-    for (int i = 0; i <= dimension; i++){
-        vector<int> optimal;
-        for (int j = 1; j <= dimension; j++){
-            if(i != j)
-                optimal.push_back(j);
-        }      
-        arrangedMatrix.push_back(optimal);
-        sort(arrangedMatrix[i].begin(), arrangedMatrix[i].end(), arranged);
-        arranged.counter++;
-    }
-
-    for (int i = 0; i <= dimension; i++){
-        vector<int> optimal;
-        for (int j = 1; j <= dimension; j++){
-            if(i != j)
-                optimal.push_back(j);
-        }      
-        arrangedMatrixBackTrack.push_back(optimal);
-        sort(arrangedMatrixBackTrack[i].begin(), arrangedMatrixBackTrack[i].end(), backTraceArrange);
-        backTraceArrange.counter++;
-    }
-
-}
-
-vector<int> setPositionList(int n, vector<int> s){
-    vector<int> posList(n+1,-1);
-
-    for (int i = 0; i < n; i++)
-    {
-      posList[s[i]] = i;
-    }
-
-    return posList;
 }

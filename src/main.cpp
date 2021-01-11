@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
             cout << arg1 << "," << bestSolution << "," << somaCustos/10 << "," << bestTime << "," << somaTempos/10 << endl; 
             //cout << "tempo de execucao: " << execTime << endl;
         }
+        else
+            cout << arg1 << "," << bestSolution << "," << somaCustos << "," << bestTime << "," << somaTempos << endl; 
 
     return 0;
 }

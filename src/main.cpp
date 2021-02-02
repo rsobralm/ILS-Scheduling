@@ -18,6 +18,7 @@ using namespace std;
 double ** mJobs; // matriz de adjacencia
 double ** mSetupTimes; // matriz reorganizada;
 int n; // quantidade total de vertices
+unsigned seed;
 vector<double> compTimes;
 
 int melhoras = 0, melhorasSwap = 0, melhoras2opt = 0;
@@ -49,6 +50,13 @@ double compCostReinsertionv2(int l, vector<int> &s, int i, int j, infoSequence *
 double cpuTime();
 void swap(vector<int> &solution, double &cost, infoSequence **sequencesMatrix);
 void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes);
+void removeSelected(vector<int> &s, vector<int> &absentJobs, int l_t, int j_t, int index_j_t ,double alfa, double beta);
+int genRandomInteger(int min, int max);
+void ruin(vector<int> &s, vector<int> &absentJobs, int l_s_max, double alfa, double beta);
+void recreate(vector<int> &s, double &mkspan, vector<int> &absentJobs);
+double costInsertionJob(vector<int> &s, int job, int pos);
+vector<int> sisr_ruin_recreate(vector<int> s, double &mkspan ,int l_s_max, int alfa, int beta);
+double realcostInsertionJob(vector<int> &s, int job, int pos);
 
 int main(int argc, char** argv) {
 
@@ -99,7 +107,7 @@ int main(int argc, char** argv) {
     
     for(int run = 0; run < testes; run++){
 
-        unsigned seed = time(0);
+        seed = time(0);
         //cout << "\nseed: " << seed << endl;
         srand(seed);
         
@@ -534,8 +542,9 @@ vector<int> ils(int i_max, int i_ils){
             melhorasptb++;
             iter_ILS = 0;
         }
-        s = perturb(s1); // perturba a solução evitando resultado ótimo local
-        fs = sequenceTime(s,mJobs,mSetupTimes);
+        //s = perturb(s1); // perturba a solução evitando resultado ótimo local
+        s = sisr_ruin_recreate(s1, fs, 10, 0.5, 0.01);
+        //fs = sequenceTime(s,mJobs,mSetupTimes);
        // cout << "fs " <<fs << endl;
         iter_ILS++;
         }
@@ -675,4 +684,208 @@ void printSolution(vector<int> solucao, double **mJobs, double ** mSetupTimes){
             cTime += mSetupTimes[solucao[i]][solucao[j]] + mJobs[solucao[j]][2] + (mJobs[solucao[j]][1] - cTime);
         }
     }
+}
+
+void ruin(vector<int> &s, vector<int> &absentJobs, int l_s_max, double alfa, double beta){
+   // int l_s_max = L_max;
+    int seedJob = genRandomInteger(1,n);
+
+    //for(int i = 0; i < arrangedMatrix[seedJob].size(); i++){
+     //   int j = arrangedMatrix[seedJob][i];
+     //   if(absentJobs.empty() || (j != seedJob && absentJobs.end() != find(absentJobs.begin(), absentJobs.end(), j))){
+           int j_t = seedJob;
+
+           auto it = find(s.begin(), s.end(), j_t);
+           int index_j_t = it - s.begin();
+
+           int l_t = genRandomInteger(1, min((int)s.size()-index_j_t, l_s_max));
+           removeSelected(s, absentJobs, l_t, j_t, index_j_t, alfa, beta);
+           setSequencesMatrix(sequencesMatrix, s, s.size(), mJobs, mSetupTimes);
+       // }
+
+    //}
+}
+
+void removeSelected(vector<int> &s, vector<int> &absentJobs, int l_t, int j_t, int index_j_t, double alfa, double beta){
+
+    int stringEnd;
+    int stringBegin;
+    //int m;
+    //double beta = 2;
+    //cout << j_t << endl;
+
+    //random_device rd;
+    mt19937 gen(seed);
+    bernoulli_distribution d(alfa);
+
+
+    if(d(gen) == true){ // split string removal
+        int m = 1; // qtd jobs preservados
+
+        default_random_engine generator(seed);
+        uniform_real_distribution<double> distribution(0.0,1.0);
+
+       // if(distribution(generator) > beta){
+
+        while(distribution(generator) < beta && m < s.size() - l_t){
+            m++;
+        }
+        
+
+        do{
+            stringBegin = genRandomInteger(max(0,index_j_t-l_t), index_j_t); //indice do inicio da string na soluçao
+            //cout << "begin: " << stringBegin << endl;
+            stringEnd = stringBegin + l_t; // indice do fim da string
+            //cout << "end: " << stringEnd << endl;
+        }while(stringEnd >= s.size());
+
+        int preservedStringBegin = genRandomInteger(stringBegin, stringEnd - m);
+
+       // cout <<"m =  " << m << " begin = " << stringBegin << " end = " << stringEnd << " mBegin = " << preservedStringBegin << endl;
+
+        if(preservedStringBegin == stringBegin){
+            absentJobs.insert(absentJobs.end(), s.begin() + preservedStringBegin + m, s.begin() + stringEnd + 1);
+            s.erase(s.begin() + preservedStringBegin + m, s.begin() + stringEnd + 1);
+        }
+        if(preservedStringBegin - 1 == stringEnd - m){
+            absentJobs.insert(absentJobs.end(), s.begin() + stringBegin, s.begin() + stringEnd - m + 1);
+            s.erase(s.begin() + stringBegin, s.begin() + stringEnd - m + 1);
+        }
+        if(preservedStringBegin > stringBegin && preservedStringBegin <= stringEnd - m){
+            absentJobs.insert(absentJobs.end(), s.begin() + stringBegin, s.begin() + preservedStringBegin);
+            absentJobs.insert(absentJobs.end(), s.begin() + preservedStringBegin + m, s.begin() + stringEnd + 1);
+            s.erase(s.begin() + stringBegin, s.begin() + preservedStringBegin);
+            s.erase(s.begin() + stringBegin + m, s.begin() + stringEnd - preservedStringBegin + stringBegin + 1);
+
+        }
+
+        /*cout << "absent = ";
+        for (int i = 0; i < absentJobs.size(); i++){
+            cout << absentJobs[i] << " ";
+        }
+        cout << endl;*/
+
+
+    }
+    else{ //string removal
+
+        do{
+            stringBegin = genRandomInteger(max(0,index_j_t-l_t), index_j_t);
+            //cout << "begin: " << stringBegin << endl;
+            stringEnd = stringBegin + l_t;
+            //cout << "end: " << stringEnd << endl;
+        }while(stringEnd >= s.size());
+
+        //cout <<" begin = " << stringBegin << " end = " << stringEnd << endl;
+
+
+        absentJobs.insert(absentJobs.end(), s.begin() + stringBegin, s.begin() + stringEnd + 1);
+        s.erase(s.begin() + stringBegin, s.begin() + stringEnd + 1);
+
+    
+    }
+
+
+    
+
+}
+
+int genRandomInteger(int min, int max){
+   return min + (rand() % (max - min + 1));
+}
+
+
+void recreate(vector<int> &s, double &mkspan, vector<int> &absentJobs){
+
+    int blinkRate = 0;
+    
+    default_random_engine generator(seed);
+    uniform_real_distribution<double> distribution(0.0,1.0);
+
+    //cout <<  distribution(generator) << endl;
+    
+    sort(absentJobs.begin(), absentJobs.end());
+    
+    for (auto j : absentJobs){
+        int best_pos = -1;
+
+        if(s.size() == 0)
+            best_pos = 0;
+
+        double costInsertionInPos;
+        double costInsertionBestPos;
+        
+        //printSolution(s, mJobs, mSetupTimes);
+        for(int k = 0; k <= s.size(); k++){
+            //cout << "k = " << k << endl;
+            //cout << "j = " << j << endl;
+            if(distribution(generator) < 1 - blinkRate){
+               /* double calc = costInsertionJob(s, j, k);
+                double real = realcostInsertionJob(s, j, k);
+                    if(calc != real)
+                        cout << "calc: " << calc << " real: " << real <<" pos =  " << k << " j = " << j << " size = " << s.size() << endl;*/
+                costInsertionInPos = costInsertionJob(s, j, k);
+                if(best_pos == -1 || costInsertionInPos < costInsertionBestPos){   
+                    best_pos = k;
+                    costInsertionBestPos = costInsertionInPos;
+                }
+            } 
+        }
+        //cout << s.size() << endl;
+        s.insert(s.begin() + best_pos, j);
+        //cout << "best_pos: "<< best_pos << endl;
+        absentJobs.pop_back();
+        mkspan = costInsertionBestPos;
+
+        //atualização da matriz de subsequencias
+        setSequencesMatrix(sequencesMatrix, s, s.size(), mJobs, mSetupTimes);
+    }
+
+}
+
+double costInsertionJob(vector<int> &s, int job, int pos){
+
+    infoSequence dummyJob;
+    infoSequence seq;
+    infoSequence jobSeq; // subsequencia unitária com o job a ser inserido;
+
+    jobSeq.initialTime = mJobs[job][1];
+    jobSeq.duration = mJobs[job][2];
+    jobSeq.firstJob = job;
+    jobSeq.lastJob = job;
+
+    dummyJob.initialTime = 0;
+    dummyJob.duration = 0;
+    dummyJob.firstJob = 0;
+    dummyJob.lastJob = 0;
+
+    if(pos != 0  && pos != s.size()){
+        seq = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[0][pos-1]);
+        seq = concatenateSequencev2(mSetupTimes, mJobs, seq, jobSeq);
+        seq = concatenateSequencev2(mSetupTimes, mJobs, seq, sequencesMatrix[pos][s.size()-1]);
+   }
+
+    if(pos == 0){
+        seq = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, jobSeq);
+        seq = concatenateSequencev2(mSetupTimes, mJobs, seq, sequencesMatrix[pos][s.size()-1]);
+    }
+
+    if(pos == s.size()){
+        seq = concatenateSequencev2(mSetupTimes, mJobs, dummyJob, sequencesMatrix[0][pos-1]);
+        seq = concatenateSequencev2(mSetupTimes, mJobs, seq, jobSeq);
+    }
+
+
+    return seq.initialTime + seq.duration;
+
+}
+
+vector<int> sisr_ruin_recreate(vector<int> s, double &mkspan ,int l_s_max, int alfa, int beta){
+    vector<int> absentJobs;
+
+    ruin(s, absentJobs, l_s_max, alfa, beta);
+    recreate(s, mkspan, absentJobs);
+
+
+    return s;
 }
